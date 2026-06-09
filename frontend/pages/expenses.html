@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expenses - Expense Splitter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+        .form-card { border: none; border-radius: 14px; }
+        .expense-row:hover { background: #f8f9fa; }
+        .btn-add { background: linear-gradient(135deg, #11998e, #38ef7d); border: none; border-radius: 10px; }
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .table-card { border: none; border-radius: 14px; }
+        .badge-category { font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingOverlay">
+        <div class="spinner-border text-success" style="width:3rem;height:3rem;"></div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold fs-4" href="../index.html">💰 Expense Splitter</a>
+            <div class="d-flex gap-2">
+                <a href="dashboard.html" class="btn btn-light btn-sm">Dashboard</a>
+                <a href="groups.html"    class="btn btn-light btn-sm">Groups</a>
+                <a href="settelments.html" class="btn btn-light btn-sm">Settle</a>
+                <button onclick="logout()" class="btn btn-danger btn-sm">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+
+        <div class="mb-4">
+            <h2 class="fw-bold mb-0">💸 Expenses</h2>
+            <p class="text-muted mb-0">Add and manage group expenses</p>
+        </div>
+
+        <!-- Alerts -->
+        <div id="errorAlert"   class="alert alert-danger  d-none"></div>
+        <div id="successAlert" class="alert alert-success d-none"></div>
+
+        <!-- Add Expense Card -->
+        <div class="card form-card shadow-sm p-4 mb-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle-fill text-success me-2"></i>Add Expense</h5>
+            <form id="expenseForm" class="row g-3">
+
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Group</label>
+                    <select id="groupSelect" class="form-select" required>
+                        <option value="">-- Select a Group --</option>
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Description</label>
+                    <input type="text" id="expDesc" class="form-control" placeholder="e.g. Hotel booking" required>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Amount (₹)</label>
+                    <input type="number" id="expAmount" class="form-control" placeholder="500" min="0.01" step="0.01" required>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">Category</label>
+                    <select id="expCategory" class="form-select">
+                        <option value="General">General</option>
+                        <option value="Food">Food</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Accommodation">Accommodation</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="col-12">
+                    <button type="submit" id="addBtn" class="btn btn-add text-white px-4 fw-semibold">
+                        <i class="bi bi-plus-lg me-1"></i>
+                        <span id="addBtnText">Add Expense</span>
+                        <span id="addSpinner" class="spinner-border spinner-border-sm d-none ms-1"></span>
+                    </button>
+                </div>
+
+            </form>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="d-flex gap-3 align-items-center mb-3">
+            <div>
+                <label class="form-label fw-semibold mb-1">Filter by Group</label>
+                <select id="filterGroup" class="form-select form-select-sm" style="width:220px;">
+                    <option value="">All Groups</option>
+                </select>
+            </div>
+            <div class="ms-auto">
+                <span class="text-muted" id="expenseCount"></span>
+            </div>
+        </div>
+
+        <!-- Expenses Table -->
+        <div class="card table-card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="expensesTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Description</th>
+                                <th>Group</th>
+                                <th>Paid By</th>
+                                <th>Category</th>
+                                <th>Date</th>
+                                <th class="text-end">Amount</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="expensesTbody">
+                            <tr><td colspan="7" class="text-center py-4 text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-5 d-none">
+            <div style="font-size:4rem;">🧾</div>
+            <h4 class="mt-3 text-muted">No expenses found</h4>
+            <p class="text-muted">Add your first expense using the form above.</p>
+        </div>
+
+    </div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content border-0 rounded-3">
+            <div class="modal-body text-center p-4">
+                <div style="font-size:2.5rem;">🗑️</div>
+                <h5 class="fw-bold mt-2">Delete Expense?</h5>
+                <p class="text-muted small">This cannot be undone.</p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const API   = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user  = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token) window.location.href = 'login.html';
+
+    let allExpenses   = [];
+    let deleteExpId   = null;
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+    // ── Read groupId from URL if coming from groups page ──
+    const urlParams   = new URLSearchParams(window.location.search);
+    const preGroupId  = urlParams.get('groupId');
+
+    // ── Init ─────────────────────────────────────────────
+    async function init() {
+        await loadGroups();
+        await loadExpenses();
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // ── Load Groups (for select dropdowns) ───────────────
+    async function loadGroups() {
+        try {
+            const res  = await fetch(`${API}/groups`, { headers: authHeader() });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            const groups = data.groups || [];
+
+            const groupSelect  = document.getElementById('groupSelect');
+            const filterSelect = document.getElementById('filterGroup');
+
+            groups.forEach(g => {
+                const opt1 = new Option(g.groupName, g._id);
+                const opt2 = new Option(g.groupName, g._id);
+                groupSelect.add(opt1);
+                filterSelect.add(opt2);
+            });
+
+            // Pre-select group from URL
+            if (preGroupId) {
+                groupSelect.value  = preGroupId;
+                filterSelect.value = preGroupId;
+            }
+        } catch { /* silently fail */ }
+    }
+
+    // ── Load Expenses ─────────────────────────────────────
+    async function loadExpenses(groupId = '') {
+        const url = groupId ? `${API}/expenses?groupId=${groupId}` : `${API}/expenses`;
+        try {
+            const res  = await fetch(url, { headers: authHeader() });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            allExpenses = data.expenses || [];
+            renderExpenses(allExpenses);
+        } catch {
+            showAlert('error', 'Failed to load expenses.');
+        }
+    }
+
+    function renderExpenses(expenses) {
+        const tbody = document.getElementById('expensesTbody');
+        document.getElementById('expenseCount').textContent = `${expenses.length} expense${expenses.length !== 1 ? 's' : ''}`;
+
+        if (expenses.length === 0) {
+            tbody.innerHTML = '';
+            document.getElementById('emptyState').classList.remove('d-none');
+            return;
+        }
+        document.getElementById('emptyState').classList.add('d-none');
+
+        const categoryColors = {
+            'Food':'success', 'Transport':'info', 'Accommodation':'warning',
+            'Entertainment':'danger', 'Shopping':'secondary', 'General':'primary', 'Other':'dark'
+        };
+
+        tbody.innerHTML = expenses.map(exp => {
+            const isOwner = exp.paidBy?._id === user?._id;
+            const color   = categoryColors[exp.category] || 'primary';
+            const date    = new Date(exp.createdAt).toLocaleDateString('en-IN', {day:'numeric',month:'short',year:'numeric'});
+            return `
+            <tr class="expense-row">
+                <td class="fw-semibold">${escHtml(exp.description)}</td>
+                <td class="text-muted">${escHtml(exp.groupId?.groupName || '--')}</td>
+                <td>${escHtml(exp.paidBy?.name || '--')}</td>
+                <td><span class="badge bg-${color} badge-category">${escHtml(exp.category || 'General')}</span></td>
+                <td class="text-muted small">${date}</td>
+                <td class="text-end fw-bold text-success">₹${Number(exp.amount).toLocaleString('en-IN')}</td>
+                <td>
+                    ${isOwner ? `<button onclick="confirmDelete('${exp._id}')" class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ── Add Expense ───────────────────────────────────────
+    document.getElementById('expenseForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const groupId     = document.getElementById('groupSelect').value;
+        const description = document.getElementById('expDesc').value.trim();
+        const amount      = parseFloat(document.getElementById('expAmount').value);
+        const category    = document.getElementById('expCategory').value;
+
+        if (!groupId) { showAlert('error', 'Please select a group.'); return; }
+
+        setAddLoading(true);
+        try {
+            const res  = await fetch(`${API}/expenses`, {
+                method: 'POST',
+                headers: { ...authHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId, description, amount, category })
+            });
+            const data = await res.json();
+            if (!res.ok) { showAlert('error', data.message); return; }
+
+            // Reset form fields
+            document.getElementById('expDesc').value   = '';
+            document.getElementById('expAmount').value = '';
+            showAlert('success', `✅ Expense "${data.expense.description}" added!`);
+            loadExpenses(document.getElementById('filterGroup').value);
+        } catch {
+            showAlert('error', 'Failed to add expense.');
+        } finally {
+            setAddLoading(false);
+        }
+    });
+
+    // ── Filter by group ───────────────────────────────────
+    document.getElementById('filterGroup').addEventListener('change', function () {
+        loadExpenses(this.value);
+    });
+
+    // ── Delete Expense ────────────────────────────────────
+    function confirmDelete(expId) {
+        deleteExpId = expId;
+        deleteModal.show();
+    }
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+        deleteModal.hide();
+        try {
+            const res  = await fetch(`${API}/expenses/${deleteExpId}`, {
+                method: 'DELETE',
+                headers: authHeader()
+            });
+            const data = await res.json();
+            if (!res.ok) { showAlert('error', data.message); return; }
+            showAlert('success', '✅ Expense deleted.');
+            loadExpenses(document.getElementById('filterGroup').value);
+        } catch {
+            showAlert('error', 'Failed to delete expense.');
+        }
+    });
+
+    // ── Helpers ───────────────────────────────────────────
+    function authHeader() { return { 'Authorization': `Bearer ${token}` }; }
+    function logout()     { localStorage.clear(); window.location.href = 'login.html'; }
+    function escHtml(str) { return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    function showAlert(type, msg) {
+        const id = type === 'error' ? 'errorAlert' : 'successAlert';
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.classList.remove('d-none');
+        setTimeout(() => el.classList.add('d-none'), 4000);
+    }
+
+    function setAddLoading(loading) {
+        document.getElementById('addBtn').disabled = loading;
+        document.getElementById('addSpinner').classList.toggle('d-none', !loading);
+    }
+
+    init();
+</script>
+</body>
+</html>

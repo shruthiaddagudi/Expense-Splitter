@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Groups - Expense Splitter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+
+        /* Group Cards */
+        .group-card { border: none; border-radius: 16px; transition: transform 0.2s, box-shadow 0.2s; }
+        .group-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important; }
+        .group-avatar { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1.3rem; flex-shrink: 0; }
+
+        /* Create Card */
+        .create-card { border: 2px dashed #667eea; border-radius: 16px; background: white; }
+        .btn-create  { background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 10px; }
+
+        /* Member chips */
+        .member-chip { display: inline-flex; align-items: center; gap: 6px; background: #f0f0f8; border: 1px solid #d0d0f0; border-radius: 50px; padding: 3px 10px 3px 8px; font-size: 0.8rem; margin: 2px; }
+        .member-chip .avatar-sm { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-size: 0.65rem; font-weight: bold; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .member-chip .remove-btn { cursor: pointer; color: #999; font-size: 0.75rem; line-height: 1; padding: 0 2px; border: none; background: none; }
+        .member-chip .remove-btn:hover { color: #dc3545; }
+
+        /* Modal styles */
+        .modal-content { border: none; border-radius: 18px; }
+        .modal-header  { border-bottom: 1px solid #f0f0f0; }
+        .modal-footer  { border-top: 1px solid #f0f0f0; }
+
+        /* Loading */
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingOverlay">
+        <div class="spinner-border text-primary" style="width:3rem;height:3rem;"></div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold fs-4" href="../index.html">💰 Expense Splitter</a>
+            <div class="d-flex gap-2">
+                <a href="dashboard.html"   class="btn btn-light btn-sm">Dashboard</a>
+                <a href="expenses.html"    class="btn btn-light btn-sm">Expenses</a>
+                <a href="settelments.html" class="btn btn-light btn-sm">Settle</a>
+                <a href="profile.html"     class="btn btn-outline-light btn-sm">Profile</a>
+                <button onclick="logout()" class="btn btn-danger btn-sm">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-0">👥 My Groups</h2>
+                <p class="text-muted mb-0" id="groupCount">Loading...</p>
+            </div>
+        </div>
+
+        <!-- Alerts -->
+        <div id="errorAlert"   class="alert alert-danger  d-none alert-dismissible">
+            <span id="errorMsg"></span>
+            <button type="button" class="btn-close" onclick="hideAlerts()"></button>
+        </div>
+        <div id="successAlert" class="alert alert-success d-none alert-dismissible">
+            <span id="successMsg"></span>
+            <button type="button" class="btn-close" onclick="hideAlerts()"></button>
+        </div>
+
+        <!-- ─── Create Group Card ─────────────────────────────────── -->
+        <div class="create-card p-4 mb-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle-fill text-primary me-2"></i>Create New Group</h5>
+            <form id="createGroupForm">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Group Name <span class="text-danger">*</span></label>
+                        <input type="text" id="groupName" class="form-control" placeholder="e.g. Goa Trip 2024" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Description <span class="text-muted fw-normal">(optional)</span></label>
+                        <input type="text" id="groupDesc" class="form-control" placeholder="Weekend getaway...">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" id="createBtn" class="btn btn-create text-white w-100 fw-semibold">
+                            <i class="bi bi-plus-lg me-1"></i><span id="createText">Create</span>
+                            <span id="createSpinner" class="spinner-border spinner-border-sm d-none ms-1"></span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- ─── Groups Grid ───────────────────────────────────────── -->
+        <div class="row g-3" id="groupsGrid"></div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-5 d-none">
+            <div style="font-size:4rem;">👥</div>
+            <h4 class="mt-3 text-muted">No groups yet</h4>
+            <p class="text-muted">Create your first group above to get started!</p>
+        </div>
+
+    </div>
+
+    <!-- ─── Add Member Modal ──────────────────────────────────────── -->
+    <div class="modal fade" id="memberModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="bi bi-person-plus-fill text-primary me-2"></i>
+                        Add Member to <span id="modalGroupName" class="text-primary"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+
+                    <!-- Add member form -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Member's Email Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-envelope-fill text-primary"></i></span>
+                            <input type="email" id="memberEmail" class="form-control" placeholder="friend@example.com">
+                            <button id="addMemberBtn" class="btn btn-primary fw-semibold" onclick="addMember()">
+                                <span id="addMemberText">Add</span>
+                                <span id="addMemberSpinner" class="spinner-border spinner-border-sm d-none ms-1"></span>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>
+                            The person must already have a registered account.
+                        </div>
+                        <div id="memberError"   class="alert alert-danger   mt-2 d-none py-2"></div>
+                        <div id="memberSuccess" class="alert alert-success  mt-2 d-none py-2"></div>
+                    </div>
+
+                    <!-- Current Members List -->
+                    <div>
+                        <label class="form-label fw-semibold">Current Members <span class="badge bg-primary" id="memberCountBadge">0</span></label>
+                        <div id="membersList" class="d-flex flex-wrap gap-1 p-3 bg-light rounded-3"></div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ─── Delete Confirm Modal ──────────────────────────────────── -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content border-0 rounded-3">
+                <div class="modal-body text-center p-4">
+                    <div style="font-size:2.5rem;">🗑️</div>
+                    <h5 class="fw-bold mt-2">Delete Group?</h5>
+                    <p class="text-muted small">This cannot be undone.</p>
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const API   = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user  = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token) window.location.href = 'login.html';
+
+    // Bootstrap modals
+    const memberModal = new bootstrap.Modal(document.getElementById('memberModal'));
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+    let activeGroupId   = null; // group being managed in the modal
+    let activeGroupData = null; // full group object for the modal
+    let deleteGroupId   = null;
+
+    // ── Load Groups ─────────────────────────────────────────────────
+    async function loadGroups() {
+        try {
+            const res  = await fetch(`${API}/groups`, { headers: authHeader() });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            renderGroups(data.groups || []);
+        } catch {
+            showAlert('error', 'Failed to load groups. Is the server running on port 5000?');
+        } finally {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    }
+
+    function renderGroups(groups) {
+        const grid = document.getElementById('groupsGrid');
+        document.getElementById('groupCount').textContent =
+            `${groups.length} group${groups.length !== 1 ? 's' : ''}`;
+
+        if (groups.length === 0) {
+            grid.innerHTML = '';
+            document.getElementById('emptyState').classList.remove('d-none');
+            return;
+        }
+        document.getElementById('emptyState').classList.add('d-none');
+
+        grid.innerHTML = groups.map(g => {
+            const initials   = g.groupName.substring(0, 2).toUpperCase();
+            const isCreator  = g.createdBy?._id === user?._id;
+            const memberCount = g.members?.length || 0;
+            const created    = new Date(g.createdAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+            // Render small member avatars (max 5, then +N)
+            const shownMembers = (g.members || []).slice(0, 5);
+            const extra = (g.members?.length || 0) - 5;
+            const memberAvatars = shownMembers.map(m => {
+                const ini = m.name ? m.name.substring(0,1).toUpperCase() : '?';
+                return `<span title="${escHtml(m.name)} (${escHtml(m.email)})"
+                              style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;font-size:0.7rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;border:2px solid white;margin-left:-6px;">
+                            ${escHtml(ini)}
+                        </span>`;
+            }).join('');
+            const extraBadge = extra > 0 ? `<span style="width:28px;height:28px;border-radius:50%;background:#e9ecef;font-size:0.65rem;font-weight:bold;display:inline-flex;align-items:center;justify-content:center;border:2px solid white;margin-left:-6px;">+${extra}</span>` : '';
+
+            return `
+            <div class="col-md-4" id="card-${g._id}">
+                <div class="card group-card shadow-sm h-100">
+                    <div class="card-body p-3 d-flex flex-column">
+
+                        <!-- Header -->
+                        <div class="d-flex align-items-start gap-3 mb-3">
+                            <div class="group-avatar">${escHtml(initials)}</div>
+                            <div class="flex-grow-1 min-w-0">
+                                <h5 class="fw-bold mb-0 text-truncate">${escHtml(g.groupName)}</h5>
+                                <small class="text-muted">${escHtml(g.description || 'No description')}</small>
+                            </div>
+                        </div>
+
+                        <!-- Badges -->
+                        <div class="d-flex gap-2 flex-wrap mb-3">
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-calendar3 me-1"></i>${created}
+                            </span>
+                            ${isCreator ? '<span class="badge bg-primary"><i class="bi bi-star-fill me-1"></i>Creator</span>' : '<span class="badge bg-secondary">Member</span>'}
+                        </div>
+
+                        <!-- Member Avatars -->
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <div style="display:flex;padding-left:6px;">${memberAvatars}${extraBadge}</div>
+                            <small class="text-muted ms-1">${memberCount} member${memberCount !== 1 ? 's' : ''}</small>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2 mt-auto flex-wrap">
+                            <a href="expenses.html?groupId=${g._id}" class="btn btn-outline-primary btn-sm flex-grow-1">
+                                <i class="bi bi-cash-stack me-1"></i>Expenses
+                            </a>
+                            <a href="settelments.html?groupId=${g._id}" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-arrow-left-right"></i>
+                            </a>
+                            ${isCreator ? `
+                            <button onclick="openMemberModal('${g._id}')" class="btn btn-outline-info btn-sm" title="Manage Members">
+                                <i class="bi bi-person-plus-fill"></i>
+                            </button>
+                            <button onclick="confirmDelete('${g._id}')" class="btn btn-outline-danger btn-sm" title="Delete Group">
+                                <i class="bi bi-trash"></i>
+                            </button>` : ''}
+                        </div>
+
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ── Create Group ─────────────────────────────────────────────────
+    document.getElementById('createGroupForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const groupName   = document.getElementById('groupName').value.trim();
+        const description = document.getElementById('groupDesc').value.trim();
+        if (!groupName) return;
+
+        setCreateLoading(true);
+        try {
+            const res  = await fetch(`${API}/groups`, {
+                method: 'POST',
+                headers: { ...authHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupName, description })
+            });
+            const data = await res.json();
+            if (!res.ok) { showAlert('error', data.message); return; }
+
+            document.getElementById('groupName').value = '';
+            document.getElementById('groupDesc').value = '';
+            showAlert('success', `✅ Group "${data.group.groupName}" created! You can now add members using the 👤+ button.`);
+            loadGroups();
+        } catch {
+            showAlert('error', 'Failed to create group.');
+        } finally {
+            setCreateLoading(false);
+        }
+    });
+
+    // ── Open Member Management Modal ─────────────────────────────────
+    async function openMemberModal(groupId) {
+        activeGroupId = groupId;
+
+        // Reset modal state
+        document.getElementById('memberEmail').value = '';
+        document.getElementById('memberError').classList.add('d-none');
+        document.getElementById('memberSuccess').classList.add('d-none');
+
+        // Fetch latest group data
+        try {
+            const res  = await fetch(`${API}/groups/${groupId}`, { headers: authHeader() });
+            const data = await res.json();
+            if (!res.ok) { showAlert('error', data.message); return; }
+            activeGroupData = data.group;
+            renderMembersList(data.group);
+            document.getElementById('modalGroupName').textContent = data.group.groupName;
+        } catch {
+            showAlert('error', 'Failed to load group details.');
+            return;
+        }
+
+        memberModal.show();
+
+        // Focus email input
+        setTimeout(() => document.getElementById('memberEmail').focus(), 400);
+    }
+
+    function renderMembersList(group) {
+        const container = document.getElementById('membersList');
+        const members   = group.members || [];
+        document.getElementById('memberCountBadge').textContent = members.length;
+
+        if (members.length === 0) {
+            container.innerHTML = '<span class="text-muted small">No members yet.</span>';
+            return;
+        }
+
+        container.innerHTML = members.map(m => {
+            const ini       = m.name ? m.name.substring(0,1).toUpperCase() : '?';
+            const isCreator = m._id === group.createdBy?._id;
+            const isYou     = m._id === user?._id;
+
+            return `
+            <div class="member-chip">
+                <div class="avatar-sm">${escHtml(ini)}</div>
+                <div>
+                    <span class="fw-semibold">${escHtml(m.name)}</span>
+                    <span class="text-muted"> · ${escHtml(m.email)}</span>
+                    ${isCreator ? ' <span class="badge bg-primary" style="font-size:0.6rem;">Creator</span>' : ''}
+                    ${isYou && !isCreator ? ' <span class="badge bg-secondary" style="font-size:0.6rem;">You</span>' : ''}
+                </div>
+                ${!isCreator ? `<button class="remove-btn" onclick="removeMember('${m._id}')" title="Remove ${escHtml(m.name)}">
+                    <i class="bi bi-x-circle-fill"></i>
+                </button>` : ''}
+            </div>`;
+        }).join('');
+    }
+
+    // ── Add Member (by email) ────────────────────────────────────────
+    async function addMember() {
+        const email = document.getElementById('memberEmail').value.trim();
+        if (!email) {
+            showMemberAlert('error', 'Please enter an email address.');
+            return;
+        }
+
+        setAddMemberLoading(true);
+        try {
+            const res  = await fetch(`${API}/groups/${activeGroupId}/members`, {
+                method: 'POST',
+                headers: { ...authHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                showMemberAlert('error', data.message);
+                return;
+            }
+
+            document.getElementById('memberEmail').value = '';
+            showMemberAlert('success', `✅ ${data.message}`);
+            activeGroupData = data.group;
+            renderMembersList(data.group);
+
+            // Also refresh the cards in background
+            loadGroups();
+
+        } catch {
+            showMemberAlert('error', 'Failed to add member. Check the server is running.');
+        } finally {
+            setAddMemberLoading(false);
+        }
+    }
+
+    // Allow pressing Enter in the email field
+    document.getElementById('memberEmail').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addMember(); }
+    });
+
+    // ── Remove Member ────────────────────────────────────────────────
+    async function removeMember(userId) {
+        if (!confirm('Remove this member from the group?')) return;
+        try {
+            const res  = await fetch(`${API}/groups/${activeGroupId}/members/${userId}`, {
+                method: 'DELETE',
+                headers: authHeader()
+            });
+            const data = await res.json();
+            if (!res.ok) { showMemberAlert('error', data.message); return; }
+            showMemberAlert('success', `✅ ${data.message}`);
+            activeGroupData = data.group;
+            renderMembersList(data.group);
+            loadGroups();
+        } catch {
+            showMemberAlert('error', 'Failed to remove member.');
+        }
+    }
+
+    // ── Delete Group ─────────────────────────────────────────────────
+    function confirmDelete(groupId) { deleteGroupId = groupId; deleteModal.show(); }
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+        deleteModal.hide();
+        try {
+            const res  = await fetch(`${API}/groups/${deleteGroupId}`, { method: 'DELETE', headers: authHeader() });
+            const data = await res.json();
+            if (!res.ok) { showAlert('error', data.message); return; }
+            showAlert('success', '✅ Group deleted.');
+            loadGroups();
+        } catch {
+            showAlert('error', 'Failed to delete group.');
+        }
+    });
+
+    // ── Helpers ──────────────────────────────────────────────────────
+    function authHeader() { return { 'Authorization': `Bearer ${token}` }; }
+    function logout()     { localStorage.clear(); window.location.href = 'login.html'; }
+    function escHtml(str) { return String(str||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function hideAlerts() {
+        document.getElementById('errorAlert').classList.add('d-none');
+        document.getElementById('successAlert').classList.add('d-none');
+    }
+    function showAlert(type, msg) {
+        hideAlerts();
+        const id = type === 'error' ? 'errorAlert' : 'successAlert';
+        document.getElementById(type === 'error' ? 'errorMsg' : 'successMsg').textContent = msg;
+        document.getElementById(id).classList.remove('d-none');
+        setTimeout(() => document.getElementById(id).classList.add('d-none'), 5000);
+    }
+    function showMemberAlert(type, msg) {
+        const errEl = document.getElementById('memberError');
+        const sucEl = document.getElementById('memberSuccess');
+        errEl.classList.add('d-none');
+        sucEl.classList.add('d-none');
+        const el = type === 'error' ? errEl : sucEl;
+        el.textContent = msg;
+        el.classList.remove('d-none');
+    }
+    function setCreateLoading(loading) {
+        document.getElementById('createBtn').disabled = loading;
+        document.getElementById('createSpinner').classList.toggle('d-none', !loading);
+    }
+    function setAddMemberLoading(loading) {
+        document.getElementById('addMemberBtn').disabled = loading;
+        document.getElementById('addMemberSpinner').classList.toggle('d-none', !loading);
+    }
+
+    loadGroups();
+</script>
+</body>
+</html>

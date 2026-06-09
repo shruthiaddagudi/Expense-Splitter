@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settlements - Expense Splitter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f0f2f5; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+        .settle-card { border: none; border-radius: 14px; }
+        .balance-row { border-left: 4px solid; border-radius: 8px; padding: 0.85rem 1rem; background: white; margin-bottom: 0.6rem; }
+        .balance-owed    { border-color: #f5576c; }
+        .balance-credited{ border-color: #38ef7d; }
+        .balance-settled { border-color: #adb5bd; }
+        .settlement-row  { background: linear-gradient(135deg, #fff9f0, #fff3cd); border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.5rem; border: 1px solid #ffc107; }
+        .btn-load { background: linear-gradient(135deg, #667eea, #764ba2); border: none; }
+        .stat-pill { background: white; border-radius: 50px; padding: 0.4rem 1rem; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div id="loadingOverlay">
+        <div class="spinner-border text-warning" style="width:3rem;height:3rem;"></div>
+    </div>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand fw-bold fs-4" href="../index.html">💰 Expense Splitter</a>
+            <div class="d-flex gap-2">
+                <a href="dashboard.html" class="btn btn-light btn-sm">Dashboard</a>
+                <a href="groups.html"    class="btn btn-light btn-sm">Groups</a>
+                <a href="expenses.html"  class="btn btn-light btn-sm">Expenses</a>
+                <button onclick="logout()" class="btn btn-danger btn-sm">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+
+        <div class="mb-4">
+            <h2 class="fw-bold mb-0">⚖️ Settlements</h2>
+            <p class="text-muted mb-0">Find out who owes whom and settle up</p>
+        </div>
+
+        <!-- Alerts -->
+        <div id="errorAlert"   class="alert alert-danger  d-none"></div>
+        <div id="successAlert" class="alert alert-success d-none"></div>
+
+        <!-- Group Selector -->
+        <div class="card settle-card shadow-sm p-4 mb-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-search me-2 text-primary"></i>Select a Group to Calculate</h5>
+            <div class="d-flex gap-3 align-items-end">
+                <div class="flex-grow-1">
+                    <label class="form-label fw-semibold">Group</label>
+                    <select id="groupSelect" class="form-select">
+                        <option value="">-- Choose a group --</option>
+                    </select>
+                </div>
+                <button id="calcBtn" class="btn btn-load text-white px-4 fw-semibold" onclick="calculateSettlements()">
+                    <i class="bi bi-calculator me-1"></i>
+                    <span id="calcText">Calculate</span>
+                    <span id="calcSpinner" class="spinner-border spinner-border-sm d-none ms-1"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="d-none">
+
+            <!-- Summary Stats -->
+            <div class="d-flex flex-wrap gap-3 mb-4" id="summaryStats"></div>
+
+            <div class="row g-3">
+
+                <!-- Balances -->
+                <div class="col-md-6">
+                    <div class="card settle-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="fw-bold mb-3">👤 Member Balances</h5>
+                            <p class="text-muted small mb-3">Green = gets money back · Red = owes money</p>
+                            <div id="balancesContainer"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settlements -->
+                <div class="col-md-6">
+                    <div class="card settle-card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="fw-bold mb-3">💳 Who Pays Whom</h5>
+                            <p class="text-muted small mb-3">Minimum transactions to settle all debts</p>
+                            <div id="settlementsContainer"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Empty State (before any calculation) -->
+        <div id="emptyState" class="text-center py-5">
+            <div style="font-size:4rem;">⚖️</div>
+            <h4 class="mt-3 text-muted">Select a group to see settlements</h4>
+            <p class="text-muted">We'll calculate the optimal way to settle up!</p>
+        </div>
+
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const API   = 'http://localhost:5000/api';
+    const token = localStorage.getItem('token');
+    const user  = JSON.parse(localStorage.getItem('user') || 'null');
+
+    if (!token) window.location.href = 'login.html';
+
+    // ── Read groupId from URL if coming from groups page ──
+    const urlParams  = new URLSearchParams(window.location.search);
+    const preGroupId = urlParams.get('groupId');
+
+    // ── Load Groups ────────────────────────────────────
+    async function loadGroups() {
+        try {
+            const res  = await fetch(`${API}/groups`, { headers: authHeader() });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            const groups = data.groups || [];
+            const sel  = document.getElementById('groupSelect');
+            groups.forEach(g => sel.add(new Option(g.groupName, g._id)));
+
+            if (preGroupId) {
+                sel.value = preGroupId;
+                calculateSettlements();
+            }
+        } catch {
+            showAlert('error', 'Failed to load groups.');
+        } finally {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    }
+
+    // ── Calculate Settlements ──────────────────────────
+    async function calculateSettlements() {
+        const groupId = document.getElementById('groupSelect').value;
+        if (!groupId) { showAlert('error', 'Please select a group first.'); return; }
+
+        setCalcLoading(true);
+        try {
+            const res  = await fetch(`${API}/settlements/${groupId}`, { headers: authHeader() });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+
+            if (!res.ok) { showAlert('error', data.message); return; }
+
+            renderResults(data);
+            document.getElementById('resultsSection').classList.remove('d-none');
+            document.getElementById('emptyState').classList.add('d-none');
+
+        } catch {
+            showAlert('error', 'Failed to calculate settlements.');
+        } finally {
+            setCalcLoading(false);
+        }
+    }
+
+    function renderResults(data) {
+        // ── Summary Stats ──
+        document.getElementById('summaryStats').innerHTML = `
+            <div class="stat-pill">🏷️ ${escHtml(data.groupName)}</div>
+            <div class="stat-pill">👥 ${data.memberCount} members</div>
+            <div class="stat-pill">💸 Total: ₹${Number(data.totalAmount).toLocaleString('en-IN')}</div>
+            <div class="stat-pill">📊 Each owes: ₹${Number(data.equalShare).toLocaleString('en-IN')}</div>`;
+
+        // ── Balances ──
+        const balancesEl = document.getElementById('balancesContainer');
+        if (!data.balances || data.balances.length === 0) {
+            balancesEl.innerHTML = '<p class="text-muted">No members in this group.</p>';
+        } else {
+            balancesEl.innerHTML = data.balances.map(b => {
+                const isYou    = b.userId === user?._id;
+                const netAbs   = Math.abs(b.net);
+                let cls, icon, statusText;
+                if (Math.abs(b.net) < 0.01) {
+                    cls = 'balance-settled'; icon = '✅'; statusText = 'Settled up';
+                } else if (b.net > 0) {
+                    cls = 'balance-credited'; icon = '💚';
+                    statusText = `Gets back ₹${netAbs.toLocaleString('en-IN')}`;
+                } else {
+                    cls = 'balance-owed'; icon = '🔴';
+                    statusText = `Owes ₹${netAbs.toLocaleString('en-IN')}`;
+                }
+                return `
+                <div class="balance-row ${cls}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="fw-semibold">${icon} ${escHtml(b.user)}${isYou ? ' <span class="badge bg-secondary ms-1 small">You</span>' : ''}</span><br>
+                            <small class="text-muted">Paid: ₹${Number(b.paid).toLocaleString('en-IN')} · Share: ₹${Number(b.share).toLocaleString('en-IN')}</small>
+                        </div>
+                        <span class="fw-bold ${b.net < 0 ? 'text-danger' : b.net > 0 ? 'text-success' : 'text-muted'}">${statusText}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── Settlements ──
+        const settleEl = document.getElementById('settlementsContainer');
+        if (!data.settlements || data.settlements.length === 0) {
+            settleEl.innerHTML = `
+                <div class="text-center py-3">
+                    <div style="font-size:2.5rem;">🎉</div>
+                    <p class="fw-semibold text-success mt-2">All settled up!</p>
+                    <p class="text-muted small">No payments needed.</p>
+                </div>`;
+        } else {
+            settleEl.innerHTML = data.settlements.map((s, i) => {
+                const fromIsYou = s.fromId === user?._id;
+                const toIsYou   = s.toId   === user?._id;
+                return `
+                <div class="settlement-row">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold ${fromIsYou ? 'text-danger' : ''}">${escHtml(s.from)}${fromIsYou ? ' (You)' : ''}</span>
+                        <i class="bi bi-arrow-right text-warning"></i>
+                        <span class="fw-bold ${toIsYou ? 'text-success' : ''}">${escHtml(s.to)}${toIsYou ? ' (You)' : ''}</span>
+                        <span class="ms-auto badge bg-warning text-dark fs-6">₹${Number(s.amount).toLocaleString('en-IN')}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    function authHeader() { return { 'Authorization': `Bearer ${token}` }; }
+    function logout()     { localStorage.clear(); window.location.href = 'login.html'; }
+    function escHtml(str) { return String(str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+    function showAlert(type, msg) {
+        const id = type === 'error' ? 'errorAlert' : 'successAlert';
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.classList.remove('d-none');
+        setTimeout(() => el.classList.add('d-none'), 4000);
+    }
+
+    function setCalcLoading(loading) {
+        document.getElementById('calcBtn').disabled = loading;
+        document.getElementById('calcSpinner').classList.toggle('d-none', !loading);
+    }
+
+    loadGroups();
+</script>
+</body>
+</html>
