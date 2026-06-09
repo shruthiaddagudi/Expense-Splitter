@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const Group = require("../models/Group");
-const Expense = require("../models/Expense");
+const Expense = require("../models/expense");
 const User = require("../models/User");
 
 // ─────────────────────────────────────────────────────────────────
