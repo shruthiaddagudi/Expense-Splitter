@@ -1,5 +1,5 @@
 const Group = require("../models/Group");
-const Expense = require("../models/Expense");
+const Expense = require("../models/expense");
 
 // ─────────────────────────────────────────────
 // @desc    Get dashboard summary for the logged-in user
