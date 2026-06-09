@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const Expense = require("../models/Expense");
+const Expense = require("../models/expense");
 const Group = require("../models/Group");
 
 // ─────────────────────────────────────────────
