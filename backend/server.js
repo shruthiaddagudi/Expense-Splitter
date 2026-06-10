@@ -19,9 +19,20 @@ const settlementRoutes = require("./routes/settlementRoutes");
 connectDB();
 
 // ── Global Middleware ──────────────────────────────────
-// Allow requests from the browser including file:// (origin = null) for local dev
+const allowedOrigins = [
+    "https://expense-splitter12.netlify.app", // ✅ Netlify production frontend
+    "http://localhost:5000",                   // local dev server
+    "http://localhost:3000",                   // alternate local dev
+    "null",                                    // file:// opened HTML pages
+];
+
 app.use(cors({
-    origin: (origin, callback) => callback(null, true), // allow all origins incl. null (file://)
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, curl, Postman)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+        callback(new Error(`CORS blocked: origin ${origin} not allowed`));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
