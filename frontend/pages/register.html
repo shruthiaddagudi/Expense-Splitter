@@ -79,10 +79,9 @@
         </div>
     </div>
 
+<script src="../js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const API = 'http://localhost:5000/api';
-
     // If already logged in, redirect to dashboard
     if (localStorage.getItem('token')) {
         window.location.href = 'dashboard.html';
@@ -126,13 +125,14 @@
             localStorage.setItem('token', data.token);
             localStorage.setItem('user', JSON.stringify(data.user));
 
-            // Show success and redirect
+            // Show success and redirect to LOGIN (user must sign in after registering)
             document.getElementById('successAlert').style.display = 'block';
+            document.getElementById('successAlert').innerHTML = '✅ Registered successfully! Redirecting to login...';
             document.getElementById('registerForm').style.display = 'none';
-            setTimeout(() => window.location.href = 'dashboard.html', 1500);
+            setTimeout(() => window.location.href = 'login.html', 1800);
 
         } catch (err) {
-            showError('Cannot connect to server. Make sure backend is running on port 5000.');
+            showError('Cannot reach the server. Please try again later.');
         } finally {
             setLoading(false);
         }

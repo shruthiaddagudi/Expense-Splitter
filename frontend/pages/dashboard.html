@@ -122,9 +122,9 @@
 
     </div>
 
+<script src="../js/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const API = 'http://localhost:5000/api';
     const token = localStorage.getItem('token');
     const user  = JSON.parse(localStorage.getItem('user') || 'null');
 
@@ -163,7 +163,8 @@
             renderRecentExpenses(d.recentExpenses);
 
         } catch (err) {
-            document.getElementById('errorBanner').textContent = 'Failed to load dashboard. Is the server running?';
+            console.error('Dashboard load error:', err);
+            document.getElementById('errorBanner').textContent = 'Failed to load dashboard. Please check your connection.';
             document.getElementById('errorBanner').classList.remove('d-none');
         } finally {
             document.getElementById('loadingOverlay').style.display = 'none';
